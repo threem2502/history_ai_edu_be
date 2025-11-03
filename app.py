@@ -34,3 +34,7 @@ def root():
         "version": "1.0.0",
         "ok": True
     })
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"})
