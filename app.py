@@ -41,6 +41,19 @@ def root():
 def health():
     return jsonify({"status": "ok"})
 
+
+@app.get("/health-plus")
+def health_plus():
+    import sys, os, pkgutil
+    return jsonify({
+        "ok": True,
+        "gemini_key_present": bool(os.getenv("GEMINI_API_KEY")),
+        "python_executable": sys.executable,
+        "cwd": os.getcwd(),
+        "has_google_genai": pkgutil.find_loader("google.genai") is not None
+    })
+
+
 # =================== Tiện ích ===================
 def ensure_client():
     if client is None or not _key_present:
