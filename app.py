@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from google import genai
+from google.genai import types
 
 MODEL_NAME = "gemini-2.5-flash"
 # =================== Khởi tạo Flask ===================
@@ -82,8 +83,8 @@ def history_chat():
         "Tuyệt đối **không xuyên tạc lịch sử, không bình luận chính trị, không xúc phạm cá nhân hay tổ chức**, "
         "và luôn thể hiện thái độ khách quan, tôn trọng, đúng chuẩn mực đạo đức."
     )
-
-    parts = [system_prompt, question]
+    prompt = system_prompt + "\n\nCâu hỏi: " + question
+    parts = [prompt]
 
     if is_stream:
         def generate():
@@ -134,8 +135,11 @@ def vision_detect():
     img_bytes = file.read()
     mime = file.mimetype or "image/jpeg"
     parts = [
-        prompt,
-        {"mime_type": mime, "data": img_bytes}
+        types.Part.from_bytes(
+        data=img_bytes,
+        mime_type=mime,
+      ),
+      prompt
     ]
 
     if is_stream:
@@ -186,14 +190,20 @@ def pdf_qa():
     is_stream = get_is_stream()
 
     pdf_bytes = pdf_file.read()
-    parts = [
+    system_prompt = (
         "Bạn là một trợ lý đọc hiểu tài liệu lịch sử bằng tiếng Việt. "
         "Hãy đọc kỹ tài liệu PDF kèm theo và trả lời câu hỏi bên dưới bằng tiếng Việt rõ ràng, ngắn gọn, "
         "dễ hiểu và **chính xác về mặt lịch sử**. "
         "Không được xuyên tạc nội dung, không thêm ý kiến cá nhân, không bàn chính trị. "
-        "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu').",
-        {"mime_type": "application/pdf", "data": pdf_bytes},
-        question
+        "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu')."
+    ),
+    prompt = system_prompt + "\n\nCâu hỏi: " + question
+    parts = [
+        types.Part.from_bytes(
+            data=pdf_bytes.read_bytes(),
+            mime_type='application/pdf',
+        ),
+        prompt
     ]
 
     if is_stream:
