@@ -5,6 +5,7 @@ from flask_cors import CORS
 from google import genai
 
 # =================== Cấu hình chung ===================
+os.environ['GEMINI_API_KEY'] = 'AIzaSyCyiYySkfCmwn3US6C99Csu91ZYAzA3NKo'
 MODEL_NAME = "gemini-2.5-flash"
 USE_MOCK = os.getenv("USE_MOCK", "false").lower() == "true"  # Bật mock khi free plan bị chặn outbound
 
@@ -40,7 +41,7 @@ def get_client():
     if _client is not None:
         return _client
     try:
-        _client = genai.Client()  # tự đọc GEMINI_API_KEY từ env
+        _client = genai.Client() 
         print(">>> GENAI: client initialized. KEY_PRESENT=", bool(os.getenv("GEMINI_API_KEY")))
         return _client
     except Exception as e:
