@@ -78,7 +78,7 @@ def history_chat():
     system_prompt = (
         "Bạn là một trợ lý AI chuyên về lịch sử Việt Nam và thế giới. "
         "Nhiệm vụ của bạn là trả lời các câu hỏi lịch sử bằng **tiếng Việt**, "
-        "dễ hiểu, ngắn gọn, chính xác, phù hợp với học sinh và người học. "
+        "dễ hiểu, ngắn gọn, chính xác, có chia tách ý rõ ràng, phù hợp với học sinh và người học. "
         "Tuyệt đối **không xuyên tạc lịch sử, không bình luận chính trị, không xúc phạm cá nhân hay tổ chức**, "
         "và luôn thể hiện thái độ khách quan, tôn trọng, đúng chuẩn mực đạo đức."
     )
@@ -227,5 +227,5 @@ def pdf_qa():
 
 
 # =============== (Không cần app.run khi chạy WSGI) ===============
-if __name__ == "__main__":
-    app.run(debug=True)
+# if __name__ == "__main__":
+#     app.run(debug=True)
