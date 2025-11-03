@@ -4,19 +4,7 @@ from flask_cors import CORS
 from google import genai
 
 os.environ['GEMINI_API_KEY'] = 'AIzaSyCyiYySkfCmwn3US6C99Csu91ZYAzA3NKo'
-
-# =================== Cấu hình Gemini (SDK mới) ===================
-try:
-    # Client tự đọc GEMINI_API_KEY từ biến môi trường
-    client = genai.Client()
-    # Kiểm tra nhanh có key không
-    _key_present = bool(os.getenv("GEMINI_API_KEY"))
-except Exception:
-    client = None
-    _key_present = False
-
 MODEL_NAME = "gemini-2.5-flash"
-
 # =================== Khởi tạo Flask ===================
 app = Flask(__name__)
 CORS(app, resources={
@@ -29,6 +17,11 @@ CORS(app, resources={
     }
 })
 
+try:
+    client = genai.Client()
+except Exception as e:
+    raise RuntimeError(f"Lỗi khởi tạo Gemini Client: {str(e)}")
+
 @app.route("/")
 def root():
     return jsonify({
@@ -38,20 +31,14 @@ def root():
         "ok": True
     })
 
+
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
 
-# =================== Tiện ích ===================
-def ensure_client():
-    if client is None or not _key_present:
-        return jsonify({
-            "ok": False,
-            "error": "Gemini model chưa được cấu hình. Vui lòng thiết lập GEMINI_API_KEY."
-        }), 503
-    return None
 
 def get_is_stream():
+    """Đọc tham số isStream từ query, JSON hoặc form."""
     qs = request.args.get("isStream")
     if qs is not None:
         return qs.lower() == "true"
@@ -66,15 +53,15 @@ def get_is_stream():
         return v.lower() == "true"
     return True
 
+
 def sse_event(text: str):
+    """Tạo sự kiện SSE."""
     return f"data: {text}\n\n"
+
 
 # =================== 1) history-chat ===================
 @app.post("/history-chat")
 def history_chat():
-    err = ensure_client()
-    if err:
-        return err
 
     payload = request.get_json(silent=True) or {}
     question = payload.get("question") or payload.get("q") or ""
@@ -85,20 +72,20 @@ def history_chat():
 
     system_prompt = (
         "Bạn là một trợ lý AI chuyên về lịch sử Việt Nam và thế giới. "
-        "Trả lời BẰNG TIẾNG VIỆT, ngắn gọn, chính xác, dễ hiểu. "
-        "Tuyệt đối không xuyên tạc lịch sử, không xúc phạm, không bình luận chính trị; "
-        "luôn khách quan và tôn trọng chuẩn mực đạo đức."
+        "Nhiệm vụ của bạn là trả lời các câu hỏi lịch sử bằng **tiếng Việt**, "
+        "dễ hiểu, ngắn gọn, chính xác, phù hợp với học sinh và người học. "
+        "Tuyệt đối **không xuyên tạc lịch sử, không bình luận chính trị, không xúc phạm cá nhân hay tổ chức**, "
+        "và luôn thể hiện thái độ khách quan, tôn trọng, đúng chuẩn mực đạo đức."
     )
 
-    contents = [system_prompt, question]
+    parts = [system_prompt, question]
 
     if is_stream:
         def generate():
             try:
-                for chunk in client.models.generate_content(
+                for chunk in client.models.generate_content_streamg(
                     model=MODEL_NAME,
-                    contents=contents,
-                    stream=True
+                    contents=parts,
                 ):
                     if hasattr(chunk, "text") and chunk.text:
                         yield sse_event(chunk.text)
@@ -108,116 +95,127 @@ def history_chat():
                 yield "event: done\ndata: [END]\n\n"
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
     else:
         try:
-            resp = client.models.generate_content(model=MODEL_NAME, contents=contents)
-            return jsonify({"ok": True, "answer": getattr(resp, "text", None)})
+            resp = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=parts,
+            )
+            return jsonify({
+                "ok": True,
+                "answer": getattr(resp, "text", None),
+            })
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
+
 
 # =================== 2) vision-detect ===================
-@app.post("/vision-detect")
-def vision_detect():
-    err = ensure_client()
-    if err:
-        return err
+# @app.post("/vision-detect")
+# def vision_detect():
+#     err = ensure_model()
+#     if err:
+#         return err
 
-    file = request.files.get("image") or request.files.get("file")
-    if not file:
-        return jsonify({"ok": False, "error": "Thiếu file hình ảnh (image)"}), 400
+#     file = request.files.get("image") or request.files.get("file")
+#     if not file:
+#         return jsonify({"ok": False, "error": "Thiếu file hình ảnh (image)"}), 400
 
-    prompt = (
-        "Phân tích hình ảnh BẰNG TIẾNG VIỆT. "
-        "Nếu là danh nhân/nhân vật/đồ vật lịch sử, nêu tên, thời kỳ, vai trò/bối cảnh. "
-        "Nếu không chắc, nêu các khả năng hợp lý và ghi rõ mức độ chắc chắn. "
-        "Không xuyên tạc, không bịa đặt, không bình luận chính trị."
-    )
-    is_stream = get_is_stream()
+#     prompt = (
+#         "Phân tích hình ảnh này bằng **tiếng Việt**. "
+#         "Nếu đây là danh nhân, nhân vật hoặc đồ vật lịch sử, hãy nêu rõ tên, thời kỳ, vai trò hoặc bối cảnh lịch sử liên quan. "
+#         "Nếu không chắc chắn, hãy nêu các khả năng có thể nhưng **không suy đoán tùy tiện**. "
+#         "Tuyệt đối **không xuyên tạc, không bịa đặt, không nhận xét chính trị hay đạo đức**, chỉ mô tả khách quan."
+#     )
+#     is_stream = get_is_stream()
 
-    img_bytes = file.read()
-    mime = file.mimetype or "image/jpeg"
+#     img_bytes = file.read()
+#     mime = file.mimetype or "image/jpeg"
+#     parts = [
+#         prompt,
+#         {"mime_type": mime, "data": img_bytes}
+#     ]
 
-    contents = [
-        prompt,
-        {"mime_type": mime, "data": img_bytes}
-    ]
+#     if is_stream:
+#         def generate():
+#             try:
+#                 for chunk in gemini_model.generate_content(parts, stream=True):
+#                     if hasattr(chunk, "text") and chunk.text:
+#                         yield sse_event(chunk.text)
+#                 yield "event: done\ndata: [END]\n\n"
+#             except Exception as e:
+#                 yield sse_event(f"[LỖI] {str(e)}")
+#                 yield "event: done\ndata: [END]\n\n"
 
-    if is_stream:
-        def generate():
-            try:
-                for chunk in client.models.generate_content(
-                    model=MODEL_NAME,
-                    contents=contents,
-                    stream=True
-                ):
-                    if hasattr(chunk, "text") and chunk.text:
-                        yield sse_event(chunk.text)
-                yield "event: done\ndata: [END]\n\n"
-            except Exception as e:
-                yield sse_event(f"[LỖI] {str(e)}")
-                yield "event: done\ndata: [END]\n\n"
+#         return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-        return Response(stream_with_context(generate()), mimetype="text/event-stream")
-    else:
-        try:
-            resp = client.models.generate_content(model=MODEL_NAME, contents=contents)
-            return jsonify({"ok": True, "answer": getattr(resp, "text", None)})
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+#     else:
+#         try:
+#             resp = gemini_model.generate_content(parts)
+#             return jsonify({
+#                 "ok": True,
+#                 "answer": getattr(resp, "text", None)
+#             })
+#         except Exception as e:
+#             return jsonify({"ok": False, "error": str(e)}), 500
 
-# =================== 3) pdf-qa ===================
-@app.post("/pdf-qa")
-def pdf_qa():
-    err = ensure_client()
-    if err:
-        return err
 
-    pdf_file = request.files.get("file") or request.files.get("pdf")
-    if not pdf_file:
-        return jsonify({"ok": False, "error": "Thiếu file PDF"}), 400
+# # =================== 3) pdf-qa ===================
+# @app.post("/pdf-qa")
+# def pdf_qa():
+#     err = ensure_model()
+#     if err:
+#         return err
 
-    question = (
-        request.form.get("question")
-        or request.args.get("question")
-        or (request.get_json(silent=True) or {}).get("question")
-    )
-    if not question:
-        return jsonify({"ok": False, "error": "Thiếu câu hỏi"}), 400
+#     pdf_file = request.files.get("file") or request.files.get("pdf")
+#     if not pdf_file:
+#         return jsonify({"ok": False, "error": "Thiếu file PDF"}), 400
 
-    is_stream = get_is_stream()
+#     question = (
+#         request.form.get("question")
+#         or request.args.get("question")
+#         or (request.get_json(silent=True) or {}).get("question")
+#     )
+#     if not question:
+#         return jsonify({"ok": False, "error": "Thiếu câu hỏi"}), 400
 
-    pdf_bytes = pdf_file.read()
-    contents = [
-        ("Bạn là trợ lý đọc hiểu tài liệu lịch sử, trả lời BẰNG TIẾNG VIỆT, "
-         "ngắn gọn, chính xác; không xuyên tạc, không thêm ý kiến cá nhân, không bàn chính trị. "
-         "Nếu có thể, hãy trích dẫn trang (ví dụ: 'theo trang 5')."),
-        {"mime_type": "application/pdf", "data": pdf_bytes},
-        question
-    ]
+#     is_stream = get_is_stream()
 
-    if is_stream:
-        def generate():
-            try:
-                for chunk in client.models.generate_content(
-                    model=MODEL_NAME,
-                    contents=contents,
-                    stream=True
-                ):
-                    if hasattr(chunk, "text") and chunk.text:
-                        yield sse_event(chunk.text)
-                yield "event: done\ndata: [END]\n\n"
-            except Exception as e:
-                yield sse_event(f"[LỖI] {str(e)}")
-                yield "event: done\ndata: [END]\n\n"
+#     pdf_bytes = pdf_file.read()
+#     parts = [
+#         "Bạn là một trợ lý đọc hiểu tài liệu lịch sử bằng tiếng Việt. "
+#         "Hãy đọc kỹ tài liệu PDF kèm theo và trả lời câu hỏi bên dưới bằng tiếng Việt rõ ràng, ngắn gọn, "
+#         "dễ hiểu và **chính xác về mặt lịch sử**. "
+#         "Không được xuyên tạc nội dung, không thêm ý kiến cá nhân, không bàn chính trị. "
+#         "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu').",
+#         {"mime_type": "application/pdf", "data": pdf_bytes},
+#         question
+#     ]
 
-        return Response(stream_with_context(generate()), mimetype="text/event-stream")
-    else:
-        try:
-            resp = client.models.generate_content(model=MODEL_NAME, contents=contents)
-            return jsonify({"ok": True, "answer": getattr(resp, "text", None)})
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+#     if is_stream:
+#         def generate():
+#             try:
+#                 for chunk in gemini_model.generate_content(parts, stream=True):
+#                     if hasattr(chunk, "text") and chunk.text:
+#                         yield sse_event(chunk.text)
+#                 yield "event: done\ndata: [END]\n\n"
+#             except Exception as e:
+#                 yield sse_event(f"[LỖI] {str(e)}")
+#                 yield "event: done\ndata: [END]\n\n"
 
-# =============== (Không cần app.run khi WSGI) ===============
+#         return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+#     else:
+#         try:
+#             resp = gemini_model.generate_content(parts)
+#             return jsonify({
+#                 "ok": True,
+#                 "answer": getattr(resp, "text", None)
+#             })
+#         except Exception as e:
+#             return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# =============== (Không cần app.run khi chạy WSGI) ===============
 if __name__ == "__main__":
     app.run(debug=True)
