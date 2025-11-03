@@ -6,13 +6,19 @@ from google import genai
 MODEL_NAME = "gemini-2.5-flash"
 # =================== Khởi tạo Flask ===================
 app = Flask(__name__)
+
+ALLOWED_ORIGINS = [
+    "https://threem2502.github.io",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+]
+
 CORS(app, resources={
     r"/*": {
-        "origins": [
-            "https://threem2502.github.io",
-            "https://threem2502.github.io/history_ai_edu/*",
-        ],
-        "supports_credentials": True
+        "origins": ALLOWED_ORIGINS,
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": False, 
     }
 })
 
@@ -82,7 +88,7 @@ def history_chat():
     if is_stream:
         def generate():
             try:
-                for chunk in client.models.generate_content_streamg(
+                for chunk in client.models.generate_content_stream(
                     model=MODEL_NAME,
                     contents=parts,
                 ):
@@ -110,109 +116,114 @@ def history_chat():
 
 
 # =================== 2) vision-detect ===================
-# @app.post("/vision-detect")
-# def vision_detect():
-#     err = ensure_model()
-#     if err:
-#         return err
+@app.post("/vision-detect")
+def vision_detect():
 
-#     file = request.files.get("image") or request.files.get("file")
-#     if not file:
-#         return jsonify({"ok": False, "error": "Thiếu file hình ảnh (image)"}), 400
+    file = request.files.get("image") or request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Thiếu file hình ảnh (image)"}), 400
 
-#     prompt = (
-#         "Phân tích hình ảnh này bằng **tiếng Việt**. "
-#         "Nếu đây là danh nhân, nhân vật hoặc đồ vật lịch sử, hãy nêu rõ tên, thời kỳ, vai trò hoặc bối cảnh lịch sử liên quan. "
-#         "Nếu không chắc chắn, hãy nêu các khả năng có thể nhưng **không suy đoán tùy tiện**. "
-#         "Tuyệt đối **không xuyên tạc, không bịa đặt, không nhận xét chính trị hay đạo đức**, chỉ mô tả khách quan."
-#     )
-#     is_stream = get_is_stream()
+    prompt = (
+        "Phân tích hình ảnh này bằng **tiếng Việt**. "
+        "Nếu đây là danh nhân, nhân vật hoặc đồ vật lịch sử, hãy nêu rõ tên, thời kỳ, vai trò hoặc bối cảnh lịch sử liên quan. "
+        "Nếu không chắc chắn, hãy nêu các khả năng có thể nhưng **không suy đoán tùy tiện**. "
+        "Tuyệt đối **không xuyên tạc, không bịa đặt, không nhận xét chính trị hay đạo đức**, chỉ mô tả khách quan."
+    )
+    is_stream = get_is_stream()
 
-#     img_bytes = file.read()
-#     mime = file.mimetype or "image/jpeg"
-#     parts = [
-#         prompt,
-#         {"mime_type": mime, "data": img_bytes}
-#     ]
+    img_bytes = file.read()
+    mime = file.mimetype or "image/jpeg"
+    parts = [
+        prompt,
+        {"mime_type": mime, "data": img_bytes}
+    ]
 
-#     if is_stream:
-#         def generate():
-#             try:
-#                 for chunk in gemini_model.generate_content(parts, stream=True):
-#                     if hasattr(chunk, "text") and chunk.text:
-#                         yield sse_event(chunk.text)
-#                 yield "event: done\ndata: [END]\n\n"
-#             except Exception as e:
-#                 yield sse_event(f"[LỖI] {str(e)}")
-#                 yield "event: done\ndata: [END]\n\n"
+    if is_stream:
+        def generate():
+            try:
+                for chunk in client.models.generate_content_stream(
+                    model=MODEL_NAME,
+                    contents=parts,
+                ):
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield sse_event(chunk.text)
+                yield "event: done\ndata: [END]\n\n"
+            except Exception as e:
+                yield sse_event(f"[LỖI] {str(e)}")
+                yield "event: done\ndata: [END]\n\n"
 
-#         return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-#     else:
-#         try:
-#             resp = gemini_model.generate_content(parts)
-#             return jsonify({
-#                 "ok": True,
-#                 "answer": getattr(resp, "text", None)
-#             })
-#         except Exception as e:
-#             return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            resp = client.models.generate_content(
+                    model=MODEL_NAME,
+                    contents=parts,
+                )
+            return jsonify({
+                "ok": True,
+                "answer": getattr(resp, "text", None)
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# # =================== 3) pdf-qa ===================
-# @app.post("/pdf-qa")
-# def pdf_qa():
-#     err = ensure_model()
-#     if err:
-#         return err
+# =================== 3) pdf-qa ===================
+@app.post("/pdf-qa")
+def pdf_qa():
+    pdf_file = request.files.get("file") or request.files.get("pdf")
+    if not pdf_file:
+        return jsonify({"ok": False, "error": "Thiếu file PDF"}), 400
 
-#     pdf_file = request.files.get("file") or request.files.get("pdf")
-#     if not pdf_file:
-#         return jsonify({"ok": False, "error": "Thiếu file PDF"}), 400
+    question = (
+        request.form.get("question")
+        or request.args.get("question")
+        or (request.get_json(silent=True) or {}).get("question")
+    )
+    if not question:
+        return jsonify({"ok": False, "error": "Thiếu câu hỏi"}), 400
 
-#     question = (
-#         request.form.get("question")
-#         or request.args.get("question")
-#         or (request.get_json(silent=True) or {}).get("question")
-#     )
-#     if not question:
-#         return jsonify({"ok": False, "error": "Thiếu câu hỏi"}), 400
+    is_stream = get_is_stream()
 
-#     is_stream = get_is_stream()
+    pdf_bytes = pdf_file.read()
+    parts = [
+        "Bạn là một trợ lý đọc hiểu tài liệu lịch sử bằng tiếng Việt. "
+        "Hãy đọc kỹ tài liệu PDF kèm theo và trả lời câu hỏi bên dưới bằng tiếng Việt rõ ràng, ngắn gọn, "
+        "dễ hiểu và **chính xác về mặt lịch sử**. "
+        "Không được xuyên tạc nội dung, không thêm ý kiến cá nhân, không bàn chính trị. "
+        "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu').",
+        {"mime_type": "application/pdf", "data": pdf_bytes},
+        question
+    ]
 
-#     pdf_bytes = pdf_file.read()
-#     parts = [
-#         "Bạn là một trợ lý đọc hiểu tài liệu lịch sử bằng tiếng Việt. "
-#         "Hãy đọc kỹ tài liệu PDF kèm theo và trả lời câu hỏi bên dưới bằng tiếng Việt rõ ràng, ngắn gọn, "
-#         "dễ hiểu và **chính xác về mặt lịch sử**. "
-#         "Không được xuyên tạc nội dung, không thêm ý kiến cá nhân, không bàn chính trị. "
-#         "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu').",
-#         {"mime_type": "application/pdf", "data": pdf_bytes},
-#         question
-#     ]
+    if is_stream:
+        def generate():
+            try:
+                for chunk in client.models.generate_content_stream(
+                    model=MODEL_NAME,
+                    contents=parts,
+                ):
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield sse_event(chunk.text)
+                yield "event: done\ndata: [END]\n\n"
+            except Exception as e:
+                yield sse_event(f"[LỖI] {str(e)}")
+                yield "event: done\ndata: [END]\n\n"
 
-#     if is_stream:
-#         def generate():
-#             try:
-#                 for chunk in gemini_model.generate_content(parts, stream=True):
-#                     if hasattr(chunk, "text") and chunk.text:
-#                         yield sse_event(chunk.text)
-#                 yield "event: done\ndata: [END]\n\n"
-#             except Exception as e:
-#                 yield sse_event(f"[LỖI] {str(e)}")
-#                 yield "event: done\ndata: [END]\n\n"
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-#         return Response(stream_with_context(generate()), mimetype="text/event-stream")
-
-#     else:
-#         try:
-#             resp = gemini_model.generate_content(parts)
-#             return jsonify({
-#                 "ok": True,
-#                 "answer": getattr(resp, "text", None)
-#             })
-#         except Exception as e:
-#             return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            resp = client.models.generate_content(
+                    model=MODEL_NAME,
+                    contents=parts,
+                )
+            return jsonify({
+                "ok": True,
+                "answer": getattr(resp, "text", None)
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # =============== (Không cần app.run khi chạy WSGI) ===============
