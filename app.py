@@ -3,7 +3,6 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from google import genai
 
-os.environ['GEMINI_API_KEY'] = 'AIzaSyCyiYySkfCmwn3US6C99Csu91ZYAzA3NKo'
 MODEL_NAME = "gemini-2.5-flash"
 # =================== Khởi tạo Flask ===================
 app = Flask(__name__)
@@ -18,7 +17,7 @@ CORS(app, resources={
 })
 
 try:
-    client = genai.Client()
+    client = genai.Client(api_key='AIzaSyCyiYySkfCmwn3US6C99Csu91ZYAzA3NKo')
 except Exception as e:
     raise RuntimeError(f"Lỗi khởi tạo Gemini Client: {str(e)}")
 
