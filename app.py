@@ -128,8 +128,8 @@ def vision_detect():
         Hãy quan sát kỹ bức ảnh lịch sử được cung cấp và thực hiện các yêu cầu sau:
 
         1. Nhận diện hình ảnh:
-        - Mô tả chi tiết những gì bạn nhìn thấy (nhân vật, hiện vật, trang phục, công trình, cảnh vật...).
-        - Xác định xem đây là tranh minh họa, hiện vật khảo cổ, hay ảnh chụp thực tế.
+        - Đồ vật/Nhân vật trong ảnh có thể là ai. (Nếu nghi ngờ không phải nhân vật lịch sử thì bỏ qua)
+        - Nếu là tranh bối cảnh, phong cảnh thì đưa ra bức ảnh có thể là phong cảnh ở đâu.
 
         2. Bối cảnh lịch sử:
         - Nêu thời kỳ hoặc triều đại liên quan.
