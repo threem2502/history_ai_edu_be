@@ -144,8 +144,8 @@ def vision_detect():
         - So sánh nếu có hình ảnh hoặc hiện vật tương tự trong lịch sử Việt Nam hay thế giới.
         - Cung cấp một số thông tin thú vị hoặc ít người biết về đối tượng này (nếu có).
 
-        5. Tóm tắt ngắn gọn (2–3 câu):
-        - Viết lại phần kết luận bằng lời dễ hiểu dành cho học sinh tiểu học hoặc THCS.
+        5. Tóm tắt ngắn gọn:
+        - Viết lại phần kết luận bằng lời dễ hiểu dành cho học sinh tiểu học hoặc THCS. (Từ 2 đến 3 câu, không nhắc lại câu này trong câu trả lời)
         """
 
     is_stream = get_is_stream()
