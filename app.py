@@ -124,12 +124,30 @@ def vision_detect():
     if not file:
         return jsonify({"ok": False, "error": "Thiếu file hình ảnh (image)"}), 400
 
-    prompt = (
-        "Phân tích hình ảnh này bằng **tiếng Việt**. "
-        "Nếu đây là danh nhân, nhân vật hoặc đồ vật lịch sử, hãy nêu rõ tên, thời kỳ, vai trò hoặc bối cảnh lịch sử liên quan. "
-        "Nếu không chắc chắn, hãy nêu các khả năng có thể nhưng **không suy đoán tùy tiện**. "
-        "Tuyệt đối **không xuyên tạc, không bịa đặt, không nhận xét chính trị hay đạo đức**, chỉ mô tả khách quan."
-    )
+    history_image_prompt = """
+        Hãy quan sát kỹ bức ảnh lịch sử được cung cấp và thực hiện các yêu cầu sau:
+
+        1. Nhận diện hình ảnh:
+        - Mô tả chi tiết những gì bạn nhìn thấy (nhân vật, hiện vật, trang phục, công trình, cảnh vật...).
+        - Xác định xem đây là tranh minh họa, hiện vật khảo cổ, hay ảnh chụp thực tế.
+
+        2. Bối cảnh lịch sử:
+        - Nêu thời kỳ hoặc triều đại liên quan.
+        - Giải thích sự kiện hoặc truyền thuyết gắn liền với hình ảnh.
+        - Nếu có nhân vật, hãy cho biết vai trò của họ trong lịch sử Việt Nam (hoặc lịch sử thế giới nếu không phải Việt Nam).
+
+        3. Ý nghĩa & giá trị:
+        - Nêu ý nghĩa lịch sử, văn hóa hoặc quân sự của đối tượng trong ảnh.
+        - Giải thích vì sao hình ảnh này thường được nhắc đến hoặc trưng bày trong sách / bảo tàng / tư liệu giảng dạy.
+
+        4. Thông tin mở rộng:
+        - So sánh nếu có hình ảnh hoặc hiện vật tương tự trong lịch sử Việt Nam hay thế giới.
+        - Cung cấp một số thông tin thú vị hoặc ít người biết về đối tượng này (nếu có).
+
+        5. Tóm tắt ngắn gọn (2–3 câu):
+        - Viết lại phần kết luận bằng lời dễ hiểu dành cho học sinh tiểu học hoặc THCS.
+        """
+
     is_stream = get_is_stream()
 
     img_bytes = file.read()
@@ -139,7 +157,7 @@ def vision_detect():
         data=img_bytes,
         mime_type=mime,
       ),
-      prompt
+      history_image_prompt
     ]
 
     if is_stream:
@@ -196,11 +214,12 @@ def pdf_qa():
         "dễ hiểu và **chính xác về mặt lịch sử**. "
         "Không được xuyên tạc nội dung, không thêm ý kiến cá nhân, không bàn chính trị. "
         "Nếu có thể, hãy trích dẫn (ví dụ: 'theo trang 5 của tài liệu')."
-    ),
+    )
     prompt = system_prompt + "\n\nCâu hỏi: " + question
+
     parts = [
         types.Part.from_bytes(
-            data=pdf_bytes.read_bytes(),
+            data=pdf_bytes,
             mime_type='application/pdf',
         ),
         prompt
@@ -225,9 +244,9 @@ def pdf_qa():
     else:
         try:
             resp = client.models.generate_content(
-                    model=MODEL_NAME,
-                    contents=parts,
-                )
+                model=MODEL_NAME,
+                contents=parts,
+            )
             return jsonify({
                 "ok": True,
                 "answer": getattr(resp, "text", None)
@@ -236,6 +255,7 @@ def pdf_qa():
             return jsonify({"ok": False, "error": str(e)}), 500
 
 
+
 # =============== (Không cần app.run khi chạy WSGI) ===============
-# if __name__ == "__main__":
-#     app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True)
