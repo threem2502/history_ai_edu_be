@@ -24,7 +24,7 @@ CORS(app, resources={
 })
 
 try:
-    client = genai.Client(api_key='AIzaSyCyiYySkfCmwn3US6C99Csu91ZYAzA3NKo')
+    client = genai.Client(api_key='AIzaSyASulB-beujUCFVegpntV1pVY-M0mrA37E')
 except Exception as e:
     raise RuntimeError(f"Lỗi khởi tạo Gemini Client: {str(e)}")
 
